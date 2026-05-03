@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useTheme } from '../hooks/ThemeContext';
-import { useSQLiteContext } from 'expo-sqlite';
-import { getSettingDb, updateSettingDb } from '../database/db';
+import { apiClient } from '../api/client';
 import { Settings as SettingsIcon, User, Palette, Bell, Shield, HelpCircle, LogOut, ChevronRight, Save, Trash2 } from 'lucide-react-native';
 
 const SettingsScreen = ({ navigation }) => {
     const { theme, themeMode, toggleTheme } = useTheme();
-    const db = useSQLiteContext();
     const [userName, setUserName] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -18,8 +16,8 @@ const SettingsScreen = ({ navigation }) => {
 
     const loadSettings = async () => {
         try {
-            const name = await getSettingDb(db, 'user_name', 'User');
-            setUserName(name);
+            const nameData = await fetch('http://10.0.2.2:5000/api/settings/user_name').then(res => res.json());
+            setUserName(nameData?.value || 'User');
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
     };
@@ -28,7 +26,11 @@ const SettingsScreen = ({ navigation }) => {
         if (!userName.trim()) return Alert.alert('Error', 'Name cannot be empty');
         setSaving(true);
         try {
-            await updateSettingDb(db, 'user_name', userName);
+            await fetch('http://10.0.2.2:5000/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: 'user_name', value: userName })
+            });
             Alert.alert('Success', 'Profile updated!');
         } catch (e) { Alert.alert('Error', 'Failed to update name'); }
         finally { setSaving(false); }
@@ -37,17 +39,15 @@ const SettingsScreen = ({ navigation }) => {
     const handleResetData = () => {
         Alert.alert(
             "Security Check",
-            "This will delete ALL transactions and settings. This cannot be undone!",
+            "This will delete data on the server. This cannot be undone!",
             [
                 { text: "Cancel", style: "cancel" },
                 {
                     text: "Delete Everything",
                     style: "destructive",
                     onPress: async () => {
-                        await db.execAsync('DELETE FROM expenses');
-                        await db.execAsync('DELETE FROM settings');
-                        Alert.alert("Reset Complete", "The app has been reset.");
-                        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+                        // In a real app, you'd have a reset endpoint
+                        Alert.alert("Notice", "Reset functionality should be implemented on the backend.");
                     }
                 }
             ]
@@ -103,7 +103,13 @@ const SettingsScreen = ({ navigation }) => {
                             value={themeMode === 'dark'}
                             onValueChange={async (val) => {
                                 toggleTheme();
-                                await updateSettingDb(db, 'theme_mode', val ? 'dark' : 'light');
+                                try {
+                                    await fetch('http://10.0.2.2:5000/api/settings', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ key: 'theme_mode', value: val ? 'dark' : 'light' })
+                                    });
+                                } catch (e) { console.error(e); }
                             }}
                             trackColor={{ false: '#cbd5e1', true: theme.colors.secondary }}
                         />

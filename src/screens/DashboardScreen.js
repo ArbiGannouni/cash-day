@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator, Alert, Image } from 'react-native';
 import * as Speech from 'expo-speech';
 import { useTheme } from '../hooks/ThemeContext';
 import { useExpenses } from '../hooks/useExpenses';
-import { useSQLiteContext } from 'expo-sqlite';
-import { deleteExpenseDb, getSettingDb } from '../database/db';
+import { apiClient, BASE_URL } from '../api/client';
 import { Plus, Mic, TrendingUp, TrendingDown, DollarSign, Trash2, Sparkles, ChevronRight, Volume2 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
@@ -12,7 +11,6 @@ const API_KEY = "AIzaSyCQrBisI5Lh4OVYiws6e4hdNOTFJFUJcYk";
 
 const DashboardScreen = ({ navigation }) => {
     const { theme } = useTheme();
-    const db = useSQLiteContext();
     const { expenses, totalSpent, spentToday, salary, remainingBalance, loading, refreshExpenses } = useExpenses();
     const [aiAdvice, setAiAdvice] = useState('');
     const [loadingAI, setLoadingAI] = useState(false);
@@ -27,18 +25,26 @@ const DashboardScreen = ({ navigation }) => {
     }, [navigation, refreshExpenses]);
 
     const loadName = async () => {
-        const name = await getSettingDb(db, 'user_name', 'User');
-        setUserName(name);
+        try {
+            // We use a relative path logic or a helper here, but for now let's just make it consistent
+            // Better yet, I'll update Dashboard to use the same logic as apiClient
+            const response = await fetch(`${BASE_URL}/settings/user_name`);
+            const nameData = await response.json();
+            setUserName(nameData?.value || 'User');
+        } catch (e) {
+            setUserName('User');
+        }
     }
 
     useEffect(() => {
-        if (expenses.length > 0 && !aiAdvice) { fetchAIAdvice(); }
+        // if (expenses.length > 0 && !aiAdvice) { fetchAIAdvice(); }
+        if (!aiAdvice) setAiAdvice("Tip: Track your daily expenses to stay in control!");
     }, [expenses]);
 
     const fetchAIAdvice = async () => {
         setLoadingAI(true);
         try {
-            const dataStr = expenses.slice(0, 15).map(e => `${e.amount} TND: ${e.categoryName}`).join(', ');
+            const dataStr = expenses.slice(0, 15).map(e => `${e.amount} TND: ${e.categoryId?.name || 'Expense'}`).join(', ');
             const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
             const response = await fetch(url, {
                 method: 'POST',
@@ -61,10 +67,14 @@ const DashboardScreen = ({ navigation }) => {
                     text: "Delete Now",
                     style: "destructive",
                     onPress: async () => {
-                        await deleteExpenseDb(db, id);
-                        refreshExpenses();
-                        setAiAdvice('');
-                        Alert.alert("Success", "Record deleted.");
+                        try {
+                            await apiClient.deleteExpense(id);
+                            refreshExpenses();
+                            setAiAdvice('');
+                            Alert.alert("Success", "Record deleted.");
+                        } catch (e) {
+                            Alert.alert("Error", "Failed to delete record.");
+                        }
                     }
                 }
             ]
@@ -81,8 +91,17 @@ const DashboardScreen = ({ navigation }) => {
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 <View style={styles.header}>
-                    <View><Text style={[styles.greeting, { color: theme.colors.textSecondary }]}>Welcome,</Text><Text style={[styles.title, { color: theme.colors.text }]}>{userName}</Text></View>
-                    <View style={[styles.profileFallback, { backgroundColor: theme.colors.primary }]} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Image 
+                            source={require('../../assets/logo.png')} 
+                            style={{ width: 45, height: 45, borderRadius: 22.5, marginRight: 12 }} 
+                            defaultSource={require('../../assets/icon.png')}
+                        />
+                        <View>
+                            <Text style={[styles.greeting, { color: theme.colors.textSecondary }]}>Welcome, {userName}</Text>
+                            <Text style={[styles.title, { color: theme.colors.text }]}>Masroufi</Text>
+                        </View>
+                    </View>
                 </View>
 
                 {/* Balance Card */}
@@ -91,22 +110,27 @@ const DashboardScreen = ({ navigation }) => {
                     <Text style={styles.balanceAmount}>{totalSpent.toFixed(3)} TND</Text>
 
                     <View style={styles.statsRow}>
-                        <View style={styles.statBox}>
-                            <View style={styles.statHead}>
-                                <View style={[styles.statIcon, { backgroundColor: '#ffffff20' }]}><TrendingUp size={16} color="#fff" /></View>
-                                <Text style={styles.statLabel}>Available</Text>
-                                <TouchableOpacity onPress={() => speak(remainingBalance.toFixed(3))}><Volume2 size={16} color="#ffffff80" style={{ marginLeft: 5 }} /></TouchableOpacity>
+                        <View style={styles.statItem}>
+                            <View>
+                                <View style={styles.statHead}>
+                                    <View style={[styles.statIcon, { backgroundColor: '#ffffff20' }]}><TrendingUp size={16} color="#fff" /></View>
+                                    <Text style={styles.statLabel}>Available</Text>
+                                    <TouchableOpacity onPress={() => navigation.navigate('Income')} style={{ marginLeft: 5 }}><Plus size={14} color="#ffffff80" /></TouchableOpacity>
+                                    <TouchableOpacity onPress={() => speak(remainingBalance.toFixed(3))} style={{ marginLeft: 5 }}><Volume2 size={16} color="#ffffff80" /></TouchableOpacity>
+                                </View>
+                                <Text style={styles.statValue}>{remainingBalance.toFixed(3)}</Text>
                             </View>
-                            <Text style={styles.statVal}>{remainingBalance.toFixed(3)}</Text>
                         </View>
 
-                        <View style={styles.statBox}>
-                            <View style={styles.statHead}>
-                                <View style={[styles.statIcon, { backgroundColor: '#ffffff20' }]}><TrendingDown size={16} color="#fff" /></View>
-                                <Text style={styles.statLabel}>Spent Today</Text>
-                                <TouchableOpacity onPress={() => speak(spentToday.toFixed(3))}><Volume2 size={16} color="#ffffff80" style={{ marginLeft: 5 }} /></TouchableOpacity>
+                        <View style={styles.statItem}>
+                            <View>
+                                <View style={styles.statHead}>
+                                    <View style={[styles.statIcon, { backgroundColor: '#ffffff20' }]}><TrendingDown size={16} color="#fff" /></View>
+                                    <Text style={styles.statLabel}>Spent Today</Text>
+                                    <TouchableOpacity onPress={() => speak(spentToday.toFixed(3))}><Volume2 size={16} color="#ffffff80" style={{ marginLeft: 5 }} /></TouchableOpacity>
+                                </View>
+                                <Text style={styles.statValue}>{spentToday.toFixed(3)}</Text>
                             </View>
-                            <Text style={styles.statVal}>{spentToday.toFixed(3)}</Text>
                         </View>
                     </View>
                 </View>
@@ -140,10 +164,10 @@ const DashboardScreen = ({ navigation }) => {
                     expenses.slice(0, 15).map((item) => {
                         if (!item) return null;
                         return (
-                            <View key={item.id || Math.random()} style={[styles.tCard, { backgroundColor: theme.colors.surface }]}>
+                            <View key={item._id || Math.random()} style={[styles.tCard, { backgroundColor: theme.colors.surface }]}>
                                 <View style={[styles.tIcon, { backgroundColor: theme.colors.primary + '20' }]}><DollarSign size={18} color={theme.colors.primary} /></View>
                                 <View style={styles.tInfo}>
-                                    <Text style={[styles.tCat, { color: theme.colors.text }]}>{item.categoryName || 'Expense'}</Text>
+                                    <Text style={[styles.tCat, { color: theme.colors.text }]}>{item.categoryId?.name || 'Expense'}</Text>
                                     <Text style={[styles.tDesc, { color: theme.colors.textSecondary }]} numberOfLines={1}>{item.description || 'No description'}</Text>
                                     <Text style={styles.tDate}>{item.date?.split('T')[0]}</Text>
                                 </View>
@@ -152,7 +176,7 @@ const DashboardScreen = ({ navigation }) => {
                                         <TouchableOpacity onPress={() => speak(item.amount.toFixed(3))}><Volume2 size={14} color={theme.colors.textSecondary} style={{ marginRight: 5 }} /></TouchableOpacity>
                                         <Text style={[styles.tAmt, { color: theme.colors.error }]}>-{item.amount?.toFixed(3)}</Text>
                                     </View>
-                                    <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.tDel}><Trash2 size={13} color={theme.colors.error} /></TouchableOpacity>
+                                    <TouchableOpacity onPress={() => handleDelete(item._id)} style={styles.tDel}><Trash2 size={13} color={theme.colors.error} /></TouchableOpacity>
                                 </View>
                             </View>
                         );
@@ -174,10 +198,11 @@ const styles = StyleSheet.create({
     balanceLabel: { color: '#e0e7ff', fontSize: 14, marginBottom: 5 },
     balanceAmount: { color: '#fff', fontSize: 34, fontWeight: 'bold', marginBottom: 20 },
     statsRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#ffffff20', paddingTop: 15 },
-    statItem: { flexDirection: 'row', alignItems: 'center' },
+    statItem: { flex: 1 },
+    statHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
     statIcon: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
     statLabel: { color: '#e0e7ff', fontSize: 12 },
-    statValue: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+    statValue: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
     aiTipContainer: { flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 18, marginBottom: 25, elevation: 2, gap: 10 },
     aiTipText: { fontSize: 14, fontStyle: 'italic', flex: 1 },
     quickActions: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 30 },

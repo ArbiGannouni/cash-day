@@ -2,19 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView, TextInput, Modal, FlatList } from 'react-native';
 import * as Speech from 'expo-speech';
 import { useTheme } from '../hooks/ThemeContext';
-import { useSQLiteContext } from 'expo-sqlite';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Mic, Square, Sparkles, Check, RotateCcw, DollarSign, Tag, FileText, ChevronDown, Volume2 } from 'lucide-react-native';
-import { addExpense, getCategories } from '../database/db';
+import { apiClient } from '../api/client';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const GEMINI_API_KEY = "AIzaSyCQrBisI5Lh4OVYiws6e4hdNOTFJFUJcYk";
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 const VoiceInputScreen = ({ navigation }) => {
     const { theme } = useTheme();
-    const db = useSQLiteContext();
     const [recording, setRecording] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [result, setResult] = useState(null);
@@ -33,8 +28,10 @@ const VoiceInputScreen = ({ navigation }) => {
     }, []);
 
     const loadCats = async () => {
-        const cats = await getCategories(db);
-        setAllCats(cats);
+        try {
+            const cats = await apiClient.getCategories();
+            setAllCats(cats);
+        } catch (e) { console.error(e); }
     };
 
     const startRecording = async () => {
@@ -60,55 +57,48 @@ const VoiceInputScreen = ({ navigation }) => {
 
         try {
             const base64Audio = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-            const prompt = `Task: Transcribe and Parse Tunisian Arabic (Darija) financial note.
-            
-            IMPORTANT CURRENCY RULES (TUNISIA):
-            - "Alf" (ألف) or "Alaf" or "1000" spoken in the context of money = 1.000 TND.
-            - "Alfayn" (ألفين) = 2.000 TND.
-            - "5 elef" (خمسة آلاف) = 5.000 TND.
-            - "Dinar" = 1.000 TND.
-            - The "amount" field in JSON MUST be the value in Dinars (e.g., 1.0, 5.0).
-            
-            Output strictly as JSON:
-            {"transcription": "Arabic text", "amount": number, "category": "Food/Transport/Rent/Health/Shopping/Others", "description": "Tunisian Arabic in Latin letters (e.g. 5 elef mekla)"}`;
+            const response = await apiClient.processVoice(base64Audio);
 
-            const modelsToTry = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-flash-latest"];
-            let finalAttempt = null;
-
-            for (const modelName of modelsToTry) {
-                try {
-                    const model = genAI.getGenerativeModel({ model: modelName });
-                    const res = await model.generateContent([
-                        prompt,
-                        { inlineData: { data: base64Audio, mimeType: "audio/mp4" } }
-                    ]);
-                    const response = await res.response;
-                    const aiText = response.text();
-
-                    const jsonMatch = aiText.match(/\{[\s\S]*\}/);
-                    if (jsonMatch) {
-                        finalAttempt = JSON.parse(jsonMatch[0]);
-                        break;
-                    }
-                } catch (inner) { console.log(inner.message); }
-            }
-
-            if (finalAttempt) {
-                setResult(finalAttempt);
-                setTranscript(finalAttempt.transcription);
+            if (response && response.transcription) {
+                setResult(response);
+                setTranscript(response.transcription);
             } else {
-                throw new Error('AI could not understand audio. Speak clearly.');
+                throw new Error('AI could not understand audio. Try speaking in Tunisian Darija.');
             }
-        } catch (e) { Alert.alert('AI Error', e.message); }
+        } catch (e) { 
+            Alert.alert('AI Error', 'Could not process audio. Please try again or enter manually.');
+            console.error(e);
+        }
         finally { setIsProcessing(false); }
     };
 
+    const [isManuallyEdited, setIsManuallyEdited] = useState(false);
+
     const handleSave = async () => {
         if (!result) return;
-        const cat = allCats.find(c => c.name.toLowerCase() === (result.category || '').toLowerCase()) || allCats[allCats.length - 1] || { id: 1 };
-        await addExpense(db, parseFloat(result.amount), cat.id, result.description, new Date().toISOString());
-        Alert.alert('Saved', 'Transaction added!');
-        navigation.goBack();
+        
+        const cat = allCats.find(c => c.name.toLowerCase() === (result.category || '').toLowerCase()) 
+                  || allCats.find(c => c.name === 'Others') 
+                  || allCats[allCats.length - 1];
+        
+        try {
+            await apiClient.addExpense({
+                amount: parseFloat(result.amount) || 0,
+                categoryId: cat?._id,
+                description: result.description || transcript,
+                originalText: transcript,
+                aiConfidence: result.confidence || 0,
+                isManuallyEdited: isManuallyEdited,
+                tags: result.tags || [],
+                paymentMethod: result.paymentMethod || 'Cash',
+                date: new Date().toISOString()
+            });
+            Alert.alert('Saved', 'Transaction added successfully!', [
+                { text: 'OK', onPress: () => navigation.navigate('Home') }
+            ]);
+        } catch (e) {
+            Alert.alert('Error', 'Failed to save transaction');
+        }
     };
 
     return (
@@ -155,7 +145,10 @@ const VoiceInputScreen = ({ navigation }) => {
                                 <TextInput
                                     style={[styles.input, { color: theme.colors.text }]}
                                     value={result.amount.toString()}
-                                    onChangeText={(val) => setResult({ ...result, amount: val })}
+                                    onChangeText={(val) => {
+                                        setResult({ ...result, amount: val });
+                                        setIsManuallyEdited(true);
+                                    }}
                                     keyboardType="numeric"
                                 />
                                 <TouchableOpacity onPress={() => speak(result.amount)}>
@@ -179,7 +172,10 @@ const VoiceInputScreen = ({ navigation }) => {
                                 <TextInput
                                     style={[styles.input, { color: theme.colors.text }]}
                                     value={result.description}
-                                    onChangeText={(val) => setResult({ ...result, description: val })}
+                                    onChangeText={(val) => {
+                                        setResult({ ...result, description: val });
+                                        setIsManuallyEdited(true);
+                                    }}
                                 />
                             </View>
 
@@ -199,13 +195,14 @@ const VoiceInputScreen = ({ navigation }) => {
                         <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Choose Category</Text>
                         <FlatList
                             data={allCats}
-                            keyExtractor={(item) => item.id.toString()}
+                            keyExtractor={(item) => item._id.toString()}
                             renderItem={({ item }) => (
                                 <TouchableOpacity
                                     style={[styles.catItem, { borderBottomColor: theme.colors.border }]}
                                     onPress={() => {
                                         setResult({ ...result, category: item.name });
                                         setIsCatModalVisible(false);
+                                        setIsManuallyEdited(true);
                                     }}
                                 >
                                     <View style={[styles.catColor, { backgroundColor: item.color }]} />

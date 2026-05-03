@@ -18,6 +18,9 @@ import HistoryScreen from './src/screens/HistoryScreen';
 import InsightsScreen from './src/screens/InsightsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
+import IncomeScreen from './src/screens/IncomeScreen';
+import CategoryScreen from './src/screens/CategoryScreen';
+
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -56,14 +59,13 @@ function RootApp() {
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
         <Stack.Screen name="Main" component={TabNavigator} />
         <Stack.Screen name="AddExpense" component={AddExpenseScreen} />
+        <Stack.Screen name="Income" component={IncomeScreen} />
+        <Stack.Screen name="Category" component={CategoryScreen} />
         <Stack.Screen
           name="History"
           component={HistoryScreen}
           options={{
-            headerShown: true,
-            title: 'All Transactions',
-            headerStyle: { backgroundColor: theme.colors.surface },
-            headerTintColor: theme.colors.text
+            headerShown: false,
           }}
         />
       </Stack.Navigator>

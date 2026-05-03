@@ -1,29 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSQLiteContext } from 'expo-sqlite';
-import { getExpenses, getSalaryDb } from '../database/db';
+import { apiClient } from '../api/client';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 export const useExpenses = () => {
-    const db = useSQLiteContext();
     const [expenses, setExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [totalSpent, setTotalSpent] = useState(0);
     const [spentToday, setSpentToday] = useState(0);
     const [salary, setSalary] = useState(0);
+    const [incomes, setIncomes] = useState([]);
 
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await getExpenses(db);
+            const data = await apiClient.getExpenses();
             setExpenses(data);
 
-            const mSalary = await getSalaryDb(db);
+            const mSalary = await apiClient.getSalary();
             setSalary(mSalary);
+
+            const incData = await apiClient.getIncomes();
+            setIncomes(incData);
 
             const start = startOfMonth(new Date());
             const end = endOfMonth(new Date());
 
-            // Filter monthly totals in JS for stability
             const monthlyData = data.filter(item => {
                 const itemDate = new Date(item.date);
                 return itemDate >= start && itemDate <= end;
@@ -42,19 +43,22 @@ export const useExpenses = () => {
         } finally {
             setLoading(false);
         }
-    }, [db]);
+    }, []);
 
     useEffect(() => {
         loadData();
     }, [loadData]);
+
+    const totalIncome = incomes.reduce((sum, i) => sum + i.amount, 0);
 
     return {
         expenses,
         totalSpent,
         spentToday,
         salary,
+        totalIncome,
         loading,
-        remainingBalance: salary - totalSpent,
+        remainingBalance: salary + totalIncome - totalSpent,
         refreshExpenses: loadData
     };
 };

@@ -71,16 +71,30 @@ router.post('/ai/process-voice', async (req, res) => {
       "transcription": "النص المسموع بالدارجة",
       "amount": الرقم فقط بالدينار,
       "category": "Food" | "Transport" | "Rent" | "Health" | "Shopping" | "Others",
-      "description": "وصف قصير",
+      "description": "وصف قصير ومختصر بالدارجة التونسية (مثلاً: قضية من العطار، خلاص ضو، إلخ)",
       "confidence": نسبة ثقتك في التصنيف بين 0 و 1,
-      "tags": ["قائمة", "أوسمة", "قصيرة"],
+      "tags": ["أوسمة", "قصيرة"],
       "paymentMethod": "Cash" | "Card" | "Transfer"
     }`;
 
-    const result = await model.generateContent([
-      systemPrompt,
-      { inlineData: { data: audioBase64, mimeType: "audio/mp4" } }
-    ]);
+    console.log(`Processing AI Voice request. Data length: ${audioBase64.length}`);
+    
+    let result;
+    try {
+      // gemini-2.0-flash is available on your key
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      result = await model.generateContent([
+        systemPrompt,
+        { inlineData: { data: audioBase64, mimeType: "audio/m4a" } }
+      ]);
+    } catch (e) {
+      console.log('Gemini 2.0-flash failed, trying 2.5-flash...', e.message);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      result = await model.generateContent([
+        systemPrompt,
+        { inlineData: { data: audioBase64, mimeType: "audio/m4a" } }
+      ]);
+    }
 
     const response = await result.response;
     const text = response.text();
@@ -93,7 +107,7 @@ router.post('/ai/process-voice', async (req, res) => {
     }
   } catch (err) {
     console.error('AI Error:', err);
-    res.status(500).json({ message: 'Error processing AI request' });
+    res.status(500).json({ message: 'Error processing AI request', error: err.message });
   }
 });
 
@@ -111,10 +125,21 @@ router.post('/ai/process-receipt', async (req, res) => {
     Return ONLY JSON:
     {"amount": number, "category": "CategoryName", "description": "Store Name"}`;
 
-    const result = await model.generateContent([
-      systemPrompt,
-      { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
-    ]);
+    let result;
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      result = await model.generateContent([
+        systemPrompt,
+        { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
+      ]);
+    } catch (e) {
+      console.log('Gemini 2.0-flash receipt failed, trying 2.5-flash...', e.message);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      result = await model.generateContent([
+        systemPrompt,
+        { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
+      ]);
+    }
 
     const response = await result.response;
     const text = response.text();
@@ -250,7 +275,6 @@ router.get('/ai/insights', async (req, res) => {
     ]);
     await Category.populate(categoryStats, { path: '_id' });
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     const systemPrompt = `You are a financial trend analyst. Analyze spending across months and categories.
     Return ONLY JSON:
     {
@@ -269,7 +293,15 @@ router.get('/ai/insights', async (req, res) => {
     Category Breakdown: ${JSON.stringify(categoryStats)}
     Currency: TND. Provide analysis in English.`;
 
-    const result = await model.generateContent([systemPrompt, userPrompt]);
+    let result;
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      result = await model.generateContent([systemPrompt, userPrompt]);
+    } catch (e) {
+      console.log('Gemini 2.0-flash insights failed, trying 2.5-flash...', e.message);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      result = await model.generateContent([systemPrompt, userPrompt]);
+    }
     const response = await result.response;
     const text = response.text();
     const jsonMatch = text.match(/\{[\s\S]*\}/);

@@ -2,13 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useTheme } from '../hooks/ThemeContext';
 import { apiClient } from '../api/client';
-import { Settings as SettingsIcon, User, Palette, Bell, Shield, HelpCircle, LogOut, ChevronRight, Save, Trash2 } from 'lucide-react-native';
+import { Settings as SettingsIcon, User, Palette, Bell, Shield, HelpCircle, LogOut, ChevronRight, Save, Trash2, Lock } from 'lucide-react-native';
+import { useSecurity } from '../hooks/SecurityContext';
+import { Modal } from 'react-native';
 
 const SettingsScreen = ({ navigation }) => {
     const { theme, themeMode, toggleTheme } = useTheme();
+    const { isSecurityEnabled, isBiometricSupported, isBiometricEnabled, savePin, setBiometric } = useSecurity();
     const [userName, setUserName] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [pinModalVisible, setPinModalVisible] = useState(false);
+    const [newPin, setNewPin] = useState('');
 
     useEffect(() => {
         loadSettings();
@@ -16,7 +21,7 @@ const SettingsScreen = ({ navigation }) => {
 
     const loadSettings = async () => {
         try {
-            const nameData = await fetch('http://10.0.2.2:5000/api/settings/user_name').then(res => res.json());
+            const nameData = await apiClient.getSetting('user_name');
             setUserName(nameData?.value || 'User');
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
@@ -26,11 +31,7 @@ const SettingsScreen = ({ navigation }) => {
         if (!userName.trim()) return Alert.alert('Error', 'Name cannot be empty');
         setSaving(true);
         try {
-            await fetch('http://10.0.2.2:5000/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: 'user_name', value: userName })
-            });
+            await apiClient.updateSetting('user_name', userName);
             Alert.alert('Success', 'Profile updated!');
         } catch (e) { Alert.alert('Error', 'Failed to update name'); }
         finally { setSaving(false); }
@@ -39,17 +40,51 @@ const SettingsScreen = ({ navigation }) => {
     const handleResetData = () => {
         Alert.alert(
             "Security Check",
-            "This will delete data on the server. This cannot be undone!",
+            "This will delete ALL your data (expenses, incomes, settings) on the server. This cannot be undone!",
             [
                 { text: "Cancel", style: "cancel" },
                 {
                     text: "Delete Everything",
                     style: "destructive",
                     onPress: async () => {
-                        // In a real app, you'd have a reset endpoint
-                        Alert.alert("Notice", "Reset functionality should be implemented on the backend.");
+                        try {
+                            setLoading(true);
+                            await apiClient.resetData();
+                            Alert.alert("Success", "All data has been cleared.");
+                            // Refresh current settings
+                            loadSettings();
+                        } catch (e) {
+                            Alert.alert("Error", "Failed to reset data.");
+                        } finally {
+                            setLoading(false);
+                        }
                     }
                 }
+            ]
+        );
+    };
+
+    const handleSavePin = async () => {
+        if (newPin.length !== 4) return Alert.alert('Error', 'PIN must be 4 digits');
+        try {
+            console.log('Attempting to save PIN:', newPin);
+            await savePin(newPin);
+            setPinModalVisible(false);
+            setNewPin('');
+            Alert.alert('Success', 'PIN set successfully!');
+        } catch (e) { 
+            console.error('SAVE PIN ERROR:', e);
+            Alert.alert('Error', 'Failed to save PIN: ' + e.message); 
+        }
+    };
+
+    const handleDisablePin = () => {
+        Alert.alert(
+            "Disable Security",
+            "Are you sure you want to disable the PIN lock?",
+            [
+                { text: "Cancel", style: "cancel" },
+                { text: "Disable", style: "destructive", onPress: () => savePin(null) }
             ]
         );
     };
@@ -88,6 +123,51 @@ const SettingsScreen = ({ navigation }) => {
                     </View>
                 </View>
 
+                {/* Security Section */}
+                <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
+                    <View style={styles.sectionHeader}>
+                        <Shield color={theme.colors.primary} size={20} />
+                        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Security</Text>
+                    </View>
+                    <View style={styles.settingItem}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <View>
+                                <Text style={[styles.settingLabel, { color: theme.colors.text }]}>PIN Lock</Text>
+                                <Text style={[styles.settingDesc, { color: theme.colors.textSecondary }]}>Secure app with 4-digit PIN</Text>
+                            </View>
+                            <Switch
+                                value={isSecurityEnabled}
+                                onValueChange={(val) => {
+                                    if (val) {
+                                        setPinModalVisible(true);
+                                    } else {
+                                        handleDisablePin();
+                                    }
+                                }}
+                                trackColor={{ false: '#cbd5e1', true: theme.colors.secondary }}
+                            />
+                        </View>
+                        {isSecurityEnabled && (
+                            <TouchableOpacity style={{ marginTop: 15 }} onPress={() => setPinModalVisible(true)}>
+                                <Text style={{ color: theme.colors.primary, fontWeight: 'bold' }}>Change PIN</Text>
+                            </TouchableOpacity>
+                        )}
+                        {isSecurityEnabled && isBiometricSupported && (
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, paddingTop: 15, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+                                <View>
+                                    <Text style={[styles.settingLabel, { color: theme.colors.text }]}>Biometric Lock</Text>
+                                    <Text style={[styles.settingDesc, { color: theme.colors.textSecondary }]}>Use Fingerprint / Face ID</Text>
+                                </View>
+                                <Switch
+                                    value={isBiometricEnabled}
+                                    onValueChange={setBiometric}
+                                    trackColor={{ false: '#cbd5e1', true: theme.colors.secondary }}
+                                />
+                            </View>
+                        )}
+                    </View>
+                </View>
+
                 {/* Appearance (Theming) */}
                 <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
                     <View style={styles.sectionHeader}>
@@ -95,24 +175,17 @@ const SettingsScreen = ({ navigation }) => {
                         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Appearance</Text>
                     </View>
                     <View style={styles.settingItem}>
-                        <View>
-                            <Text style={[styles.settingLabel, { color: theme.colors.text }]}>Dark Mode</Text>
-                            <Text style={[styles.settingDesc, { color: theme.colors.textSecondary }]}>Switch to dark interface</Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <View>
+                                <Text style={[styles.settingLabel, { color: theme.colors.text }]}>Dark Mode</Text>
+                                <Text style={[styles.settingDesc, { color: theme.colors.textSecondary }]}>Switch to dark interface</Text>
+                            </View>
+                            <Switch
+                                value={themeMode === 'dark'}
+                                onValueChange={toggleTheme}
+                                trackColor={{ false: '#cbd5e1', true: theme.colors.secondary }}
+                            />
                         </View>
-                        <Switch
-                            value={themeMode === 'dark'}
-                            onValueChange={async (val) => {
-                                toggleTheme();
-                                try {
-                                    await fetch('http://10.0.2.2:5000/api/settings', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ key: 'theme_mode', value: val ? 'dark' : 'light' })
-                                    });
-                                } catch (e) { console.error(e); }
-                            }}
-                            trackColor={{ false: '#cbd5e1', true: theme.colors.secondary }}
-                        />
                     </View>
                 </View>
 
@@ -130,6 +203,40 @@ const SettingsScreen = ({ navigation }) => {
 
                 <Text style={styles.version}>Flous Chhar Pro v1.0.2</Text>
             </ScrollView>
+
+            {/* PIN Setup Modal */}
+            <Modal visible={pinModalVisible} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+                        <View style={styles.modalHeader}>
+                            <Lock color={theme.colors.primary} size={30} />
+                            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{isSecurityEnabled ? 'Change PIN' : 'Set PIN'}</Text>
+                        </View>
+                        <Text style={[styles.modalDesc, { color: theme.colors.textSecondary }]}>Enter a 4-digit PIN to secure your app access</Text>
+                        
+                        <TextInput
+                            style={[styles.pinInput, { color: theme.colors.text, borderColor: theme.colors.border }]}
+                            value={newPin}
+                            onChangeText={setNewPin}
+                            keyboardType="numeric"
+                            maxLength={4}
+                            secureTextEntry
+                            placeholder="****"
+                            placeholderTextColor={theme.colors.textSecondary}
+                            autoFocus
+                        />
+
+                        <View style={styles.modalBtns}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={() => { setPinModalVisible(false); setNewPin(''); }}>
+                                <Text style={{ color: theme.colors.textSecondary }}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: theme.colors.primary }]} onPress={handleSavePin}>
+                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Save PIN</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -151,7 +258,16 @@ const styles = StyleSheet.create({
     settingDesc: { fontSize: 12, marginTop: 2 },
     dangerBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
     dangerText: { fontSize: 15, fontWeight: '600' },
-    version: { textAlign: 'center', color: '#94a3b8', fontSize: 12, marginTop: 10, marginBottom: 30 }
+    version: { textAlign: 'center', color: '#94a3b8', fontSize: 12, marginTop: 10, marginBottom: 30 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    modalContent: { width: '85%', borderRadius: 25, padding: 30, alignItems: 'center' },
+    modalHeader: { alignItems: 'center', marginBottom: 20 },
+    modalTitle: { fontSize: 20, fontWeight: 'bold', marginTop: 10 },
+    modalDesc: { textAlign: 'center', fontSize: 14, marginBottom: 25 },
+    pinInput: { width: '100%', height: 60, borderWidth: 2, borderRadius: 15, textAlign: 'center', fontSize: 30, letterSpacing: 10, marginBottom: 30 },
+    modalBtns: { flexDirection: 'row', gap: 15, width: '100%' },
+    cancelBtn: { flex: 1, height: 50, justifyContent: 'center', alignItems: 'center', borderRadius: 12 },
+    confirmBtn: { flex: 1, height: 50, justifyContent: 'center', alignItems: 'center', borderRadius: 12 }
 });
 
 export default SettingsScreen;

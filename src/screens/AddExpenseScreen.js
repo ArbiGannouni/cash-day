@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useTheme } from '../hooks/ThemeContext';
 import { apiClient } from '../api/client';
 import * as ImagePicker from 'expo-image-picker';
-import { Calendar, Tag, FileText, IndianRupee, Save, ArrowLeft, Camera } from 'lucide-react-native';
+import { Calendar, Tag, FileText, DollarSign, Save, ArrowLeft, Camera } from 'lucide-react-native';
 
 const AddExpenseScreen = ({ navigation, route }) => {
     const { theme } = useTheme();
@@ -106,14 +106,15 @@ const AddExpenseScreen = ({ navigation, route }) => {
                     const catStat = stats.find(s => s._id === categoryId);
                     const spentInCat = (catStat?.total || 0) + expenseAmount;
                     
-                    const categoryBudget = 200; 
+                    // Dynamic budget calculation: if salary > 0, 10% of salary per category as default
+                    const categoryBudget = salary > 0 ? (salary * 0.15) : 200; 
                     const percentage = (spentInCat / categoryBudget) * 100;
 
                     if (percentage >= 80) {
                         const alertData = await apiClient.getBudgetAlert({
                             category: cat?.name || 'Category',
-                            budget: categoryBudget,
-                            spent: spentInCat,
+                            budget: categoryBudget.toFixed(0),
+                            spent: spentInCat.toFixed(3),
                             percentage: percentage.toFixed(1),
                             language: 'English'
                         });
@@ -148,7 +149,7 @@ const AddExpenseScreen = ({ navigation, route }) => {
                     <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: theme.colors.surface }]}>
                         <ArrowLeft color={theme.colors.text} size={24} />
                     </TouchableOpacity>
-                    <Text style={[styles.title, { color: theme.colors.text }]}>Add Expense</Text>
+                    <Text style={[styles.title, { color: theme.colors.text }]}>{editingExpense ? 'Edit Expense' : 'Add Expense'}</Text>
                     <TouchableOpacity 
                         onPress={pickImage} 
                         style={[styles.scanBtn, { backgroundColor: theme.colors.primary + '15' }]}
@@ -160,7 +161,7 @@ const AddExpenseScreen = ({ navigation, route }) => {
 
                 <View style={styles.content}>
                     <View style={[styles.inputGroup, { backgroundColor: theme.colors.surface }]}>
-                        <IndianRupee size={20} color={theme.colors.primary} />
+                        <DollarSign size={20} color={theme.colors.primary} />
                         <TextInput
                             style={[styles.input, { color: theme.colors.text }]}
                             placeholder="0.000"
@@ -219,9 +220,8 @@ const AddExpenseScreen = ({ navigation, route }) => {
                         ))}
                     </View>
 
-                    <TouchableOpacity style={[styles.saveBtn, { backgroundColor: theme.colors.primary }]} onPress={handleSave}>
-                        <Save color="#fff" size={20} />
-                        <Text style={styles.saveBtnText}>Save Expense</Text>
+                    <TouchableOpacity style={[styles.saveBtn, { backgroundColor: theme.colors.primary }]} onPress={handleSave} disabled={loading}>
+                        {loading ? <ActivityIndicator color="#fff" /> : <><Save color="#fff" size={20} /><Text style={styles.saveBtnText}>Save Expense</Text></>}
                     </TouchableOpacity>
                 </View>
             </ScrollView>

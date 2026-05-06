@@ -3,10 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Scr
 import * as Speech from 'expo-speech';
 import { useTheme } from '../hooks/ThemeContext';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system/legacy';
+import { readAsStringAsync, getInfoAsync } from 'expo-file-system/legacy';
 import { Mic, Square, Sparkles, Check, RotateCcw, DollarSign, Tag, FileText, ChevronDown, Volume2 } from 'lucide-react-native';
 import { apiClient } from '../api/client';
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const VoiceInputScreen = ({ navigation }) => {
     const { theme } = useTheme();
@@ -20,6 +19,7 @@ const VoiceInputScreen = ({ navigation }) => {
     const [isCatModalVisible, setIsCatModalVisible] = useState(false);
 
     const speak = (text) => {
+        if (!text) return;
         Speech.speak(text.toString(), { language: 'ar-TN' });
     };
 
@@ -36,7 +36,10 @@ const VoiceInputScreen = ({ navigation }) => {
 
     const startRecording = async () => {
         try {
-            await Audio.requestPermissionsAsync();
+            const permission = await Audio.requestPermissionsAsync();
+            if (permission.status !== 'granted') {
+                return Alert.alert('Permission Denied', 'Microphone access is required.');
+            }
             await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
             const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
             setRecording(recording);
@@ -44,10 +47,16 @@ const VoiceInputScreen = ({ navigation }) => {
     };
 
     const stopRecording = async () => {
-        setRecording(null);
-        await recording.stopAndUnloadAsync();
-        const uri = recording.getURI();
-        processAudio(uri);
+        if (!recording) return;
+        try {
+            await recording.stopAndUnloadAsync();
+            const uri = recording.getURI();
+            setRecording(null);
+            processAudio(uri);
+        } catch (e) {
+            setRecording(null);
+            Alert.alert('Error', 'Failed to stop recording');
+        }
     };
 
     const processAudio = async (uri) => {
@@ -56,7 +65,14 @@ const VoiceInputScreen = ({ navigation }) => {
         setResult(null);
 
         try {
-            const base64Audio = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+            if (!uri) throw new Error('Recording URI is null');
+            
+            const fileInfo = await getInfoAsync(uri);
+            if (!fileInfo.exists) {
+                throw new Error('Recording file not found');
+            }
+
+            const base64Audio = await readAsStringAsync(uri, { encoding: 'base64' });
             const response = await apiClient.processVoice(base64Audio);
 
             if (response && response.transcription) {
@@ -66,8 +82,8 @@ const VoiceInputScreen = ({ navigation }) => {
                 throw new Error('AI could not understand audio. Try speaking in Tunisian Darija.');
             }
         } catch (e) { 
-            Alert.alert('AI Error', 'Could not process audio. Please try again or enter manually.');
-            console.error(e);
+            console.error('Process Audio Error:', e);
+            Alert.alert('AI Error', `Could not process audio: ${e.message || 'Unknown error'}`);
         }
         finally { setIsProcessing(false); }
     };
@@ -144,7 +160,7 @@ const VoiceInputScreen = ({ navigation }) => {
                                 <DollarSign size={18} color={theme.colors.primary} />
                                 <TextInput
                                     style={[styles.input, { color: theme.colors.text }]}
-                                    value={result.amount.toString()}
+                                    value={(result.amount || '').toString()}
                                     onChangeText={(val) => {
                                         setResult({ ...result, amount: val });
                                         setIsManuallyEdited(true);
@@ -195,7 +211,7 @@ const VoiceInputScreen = ({ navigation }) => {
                         <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Choose Category</Text>
                         <FlatList
                             data={allCats}
-                            keyExtractor={(item) => item._id.toString()}
+                            keyExtractor={(item) => item._id?.toString() || Math.random().toString()}
                             renderItem={({ item }) => (
                                 <TouchableOpacity
                                     style={[styles.catItem, { borderBottomColor: theme.colors.border }]}

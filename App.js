@@ -9,6 +9,8 @@ import { migrateDb } from './src/database/db';
 
 import { Home, Mic, Sparkles, Settings as SettingsIcon } from 'lucide-react-native';
 import { ThemeProvider, useTheme } from './src/hooks/ThemeContext';
+import { SecurityProvider, useSecurity } from './src/hooks/SecurityContext';
+import LockScreen from './src/components/LockScreen';
 
 // Screens
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -52,6 +54,11 @@ function TabNavigator() {
 
 function RootApp() {
   const { theme, themeMode } = useTheme();
+  const { isLocked } = useSecurity();
+
+  if (isLocked) {
+    return <LockScreen />;
+  }
 
   return (
     <NavigationContainer>
@@ -77,7 +84,9 @@ export default function App() {
   return (
     <SQLiteProvider databaseName="flous_chhar_v2.db" onInit={migrateDb}>
       <ThemeProvider>
-        <RootApp />
+        <SecurityProvider>
+          <RootApp />
+        </SecurityProvider>
       </ThemeProvider>
     </SQLiteProvider>
   );

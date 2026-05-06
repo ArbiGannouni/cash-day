@@ -9,7 +9,18 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Security Middleware: Check for API Key
+const API_KEY = process.env.APP_API_KEY || 'flous_chhar_secret_2026';
+app.use((req, res, next) => {
+  const clientKey = req.headers['x-api-key'];
+  if (clientKey !== API_KEY) {
+    return res.status(401).json({ message: 'Unauthorized: Invalid API Key' });
+  }
+  next();
+});
 
 app.use('/api', apiRoutes);
 

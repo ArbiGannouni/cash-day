@@ -3,11 +3,10 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Dimensions, Activ
 import * as Speech from 'expo-speech';
 import { useTheme } from '../hooks/ThemeContext';
 import { useExpenses } from '../hooks/useExpenses';
-import { apiClient, BASE_URL } from '../api/client';
+import { apiClient } from '../api/client';
 import { Plus, Mic, TrendingUp, TrendingDown, DollarSign, Trash2, Sparkles, ChevronRight, Volume2 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
-const API_KEY = "AIzaSyCQrBisI5Lh4OVYiws6e4hdNOTFJFUJcYk";
 
 const DashboardScreen = ({ navigation }) => {
     const { theme } = useTheme();
@@ -26,10 +25,7 @@ const DashboardScreen = ({ navigation }) => {
 
     const loadName = async () => {
         try {
-            // We use a relative path logic or a helper here, but for now let's just make it consistent
-            // Better yet, I'll update Dashboard to use the same logic as apiClient
-            const response = await fetch(`${BASE_URL}/settings/user_name`);
-            const nameData = await response.json();
+            const nameData = await apiClient.getSetting('user_name');
             setUserName(nameData?.value || 'User');
         } catch (e) {
             setUserName('User');
@@ -37,24 +33,23 @@ const DashboardScreen = ({ navigation }) => {
     }
 
     useEffect(() => {
-        // if (expenses.length > 0 && !aiAdvice) { fetchAIAdvice(); }
         if (!aiAdvice) setAiAdvice("Tip: Track your daily expenses to stay in control!");
-    }, [expenses]);
+    }, []);
 
     const fetchAIAdvice = async () => {
+        // AI advice can now be fetched from backend insights if needed, 
+        // but for now we keep it simple or use the backend insights route
         setLoadingAI(true);
         try {
-            const dataStr = expenses.slice(0, 15).map(e => `${e.amount} TND: ${e.categoryId?.name || 'Expense'}`).join(', ');
-            const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: `Expenses: ${dataStr}. Give 1 short saving tip in English (max 8 words).` }] }] })
-            });
-            const data = await response.json();
-            if (data.candidates) setAiAdvice(data.candidates[0].content.parts[0].text);
-        } catch (e) { setAiAdvice("Tip of the day: Track your spending to stay in control!"); }
-        finally { setLoadingAI(false); }
+            const insights = await apiClient.getAiInsights();
+            if (insights && insights.recommendation) {
+                setAiAdvice(insights.recommendation);
+            }
+        } catch (e) { 
+            setAiAdvice("Tip of the day: Track your spending to stay in control!"); 
+        } finally { 
+            setLoadingAI(false); 
+        }
     };
 
     const handleDelete = (id) => {
@@ -70,7 +65,6 @@ const DashboardScreen = ({ navigation }) => {
                         try {
                             await apiClient.deleteExpense(id);
                             refreshExpenses();
-                            setAiAdvice('');
                             Alert.alert("Success", "Record deleted.");
                         } catch (e) {
                             Alert.alert("Error", "Failed to delete record.");
@@ -82,10 +76,11 @@ const DashboardScreen = ({ navigation }) => {
     };
 
     const speak = (text) => {
+        if (!text) return;
         Speech.speak(text.toString(), { language: 'ar-TN' });
     };
 
-    if (loading || loadingAI) return <View style={[styles.container, { backgroundColor: theme.colors.background, justifyContent: 'center' }]}><ActivityIndicator size="large" color={theme.colors.primary} /></View>;
+    if (loading) return <View style={[styles.container, { backgroundColor: theme.colors.background, justifyContent: 'center' }]}><ActivityIndicator size="large" color={theme.colors.primary} /></View>;
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -107,7 +102,7 @@ const DashboardScreen = ({ navigation }) => {
                 {/* Balance Card */}
                 <View style={[styles.balanceCard, { backgroundColor: theme.colors.primary }]}>
                     <Text style={styles.balanceLabel}>Spent this Month</Text>
-                    <Text style={styles.balanceAmount}>{totalSpent.toFixed(3)} TND</Text>
+                    <Text style={styles.balanceAmount}>{(totalSpent || 0).toFixed(3)} TND</Text>
 
                     <View style={styles.statsRow}>
                         <View style={styles.statItem}>
@@ -116,9 +111,9 @@ const DashboardScreen = ({ navigation }) => {
                                     <View style={[styles.statIcon, { backgroundColor: '#ffffff20' }]}><TrendingUp size={16} color="#fff" /></View>
                                     <Text style={styles.statLabel}>Available</Text>
                                     <TouchableOpacity onPress={() => navigation.navigate('Income')} style={{ marginLeft: 5 }}><Plus size={14} color="#ffffff80" /></TouchableOpacity>
-                                    <TouchableOpacity onPress={() => speak(remainingBalance.toFixed(3))} style={{ marginLeft: 5 }}><Volume2 size={16} color="#ffffff80" /></TouchableOpacity>
+                                    <TouchableOpacity onPress={() => speak((remainingBalance || 0).toFixed(3))} style={{ marginLeft: 5 }}><Volume2 size={16} color="#ffffff80" /></TouchableOpacity>
                                 </View>
-                                <Text style={styles.statValue}>{remainingBalance.toFixed(3)}</Text>
+                                <Text style={styles.statValue}>{(remainingBalance || 0).toFixed(3)}</Text>
                             </View>
                         </View>
 
@@ -127,9 +122,9 @@ const DashboardScreen = ({ navigation }) => {
                                 <View style={styles.statHead}>
                                     <View style={[styles.statIcon, { backgroundColor: '#ffffff20' }]}><TrendingDown size={16} color="#fff" /></View>
                                     <Text style={styles.statLabel}>Spent Today</Text>
-                                    <TouchableOpacity onPress={() => speak(spentToday.toFixed(3))}><Volume2 size={16} color="#ffffff80" style={{ marginLeft: 5 }} /></TouchableOpacity>
+                                    <TouchableOpacity onPress={() => speak((spentToday || 0).toFixed(3))}><Volume2 size={16} color="#ffffff80" style={{ marginLeft: 5 }} /></TouchableOpacity>
                                 </View>
-                                <Text style={styles.statValue}>{spentToday.toFixed(3)}</Text>
+                                <Text style={styles.statValue}>{(spentToday || 0).toFixed(3)}</Text>
                             </View>
                         </View>
                     </View>
@@ -137,10 +132,10 @@ const DashboardScreen = ({ navigation }) => {
 
                 {/* AI Tip */}
                 {(aiAdvice || loadingAI) && (
-                    <View style={[styles.aiTipContainer, { backgroundColor: theme.colors.surface }]}>
+                    <TouchableOpacity onPress={fetchAIAdvice} style={[styles.aiTipContainer, { backgroundColor: theme.colors.surface }]}>
                         <Sparkles size={16} color={theme.colors.secondary} />
                         {loadingAI ? <ActivityIndicator size="small" /> : <Text style={[styles.aiTipText, { color: theme.colors.textSecondary }]}>{aiAdvice}</Text>}
-                    </View>
+                    </TouchableOpacity>
                 )}
 
                 <View style={styles.quickActions}>
@@ -173,8 +168,8 @@ const DashboardScreen = ({ navigation }) => {
                                 </View>
                                 <View style={{ alignItems: 'flex-end' }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <TouchableOpacity onPress={() => speak(item.amount.toFixed(3))}><Volume2 size={14} color={theme.colors.textSecondary} style={{ marginRight: 5 }} /></TouchableOpacity>
-                                        <Text style={[styles.tAmt, { color: theme.colors.error }]}>-{item.amount?.toFixed(3)}</Text>
+                                        <TouchableOpacity onPress={() => speak((item.amount || 0).toFixed(3))}><Volume2 size={14} color={theme.colors.textSecondary} style={{ marginRight: 5 }} /></TouchableOpacity>
+                                        <Text style={[styles.tAmt, { color: theme.colors.error }]}>-{(item.amount || 0).toFixed(3)}</Text>
                                     </View>
                                     <TouchableOpacity onPress={() => handleDelete(item._id)} style={styles.tDel}><Trash2 size={13} color={theme.colors.error} /></TouchableOpacity>
                                 </View>

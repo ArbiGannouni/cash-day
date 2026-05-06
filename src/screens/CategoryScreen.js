@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { useTheme } from '../hooks/ThemeContext';
 import { apiClient } from '../api/client';
-import { ArrowLeft, Plus, Trash2, ShoppingCart, Car, Home, Heart, Briefcase, Coffee, Music, Camera, Gift } from 'lucide-react-native';
+import { ArrowLeft, Plus, Trash2, ShoppingCart, Car, Home, Heart, Briefcase, Coffee, Music, Camera, Gift, Tag } from 'lucide-react-native';
 
 const CategoryScreen = ({ navigation }) => {
     const { theme } = useTheme();
@@ -61,6 +61,11 @@ const CategoryScreen = ({ navigation }) => {
         }
     };
 
+    const getIconComponent = (iconName) => {
+        const found = icons.find(i => i.name === iconName);
+        return found ? found.Icon : Tag;
+    };
+
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
             <View style={styles.header}>
@@ -115,16 +120,19 @@ const CategoryScreen = ({ navigation }) => {
                 {loading ? <ActivityIndicator size="large" color={theme.colors.primary} /> : (
                     <FlatList
                         data={categories}
-                        keyExtractor={(item) => item._id}
-                        renderItem={({ item }) => (
-                            <View style={[styles.catItem, { backgroundColor: theme.colors.surface }]}>
-                                <View style={[styles.catIconBox, { backgroundColor: item.color + '20' }]}>
-                                    <Text style={{ fontSize: 20 }}>{item.icon === 'ShoppingCart' ? '🛒' : '📁'}</Text>
+                        keyExtractor={(item) => item._id || Math.random().toString()}
+                        renderItem={({ item }) => {
+                            const IconComp = getIconComponent(item.icon);
+                            return (
+                                <View style={[styles.catItem, { backgroundColor: theme.colors.surface }]}>
+                                    <View style={[styles.catIconBox, { backgroundColor: (item.color || theme.colors.primary) + '20' }]}>
+                                        <IconComp size={22} color={item.color || theme.colors.primary} />
+                                    </View>
+                                    <Text style={[styles.catName, { color: theme.colors.text }]}>{item.name}</Text>
+                                    <View style={[styles.colorDot, { backgroundColor: item.color || theme.colors.primary }]} />
                                 </View>
-                                <Text style={[styles.catName, { color: theme.colors.text }]}>{item.name}</Text>
-                                <View style={[styles.colorDot, { backgroundColor: item.color }]} />
-                            </View>
-                        )}
+                            );
+                        }}
                     />
                 )}
             </View>

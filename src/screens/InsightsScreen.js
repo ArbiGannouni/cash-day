@@ -14,10 +14,15 @@ const InsightsScreen = () => {
     const [aiLoading, setAiLoading] = useState(false);
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
 
-    const months = [
-        { label: 'May 2026', value: '2026-05' },
-        { label: 'April 2026', value: '2026-04' },
-    ];
+    // Generate last 6 months dynamically
+    const months = Array.from({ length: 6 }, (_, i) => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        return {
+            label: d.toLocaleString('default', { month: 'long', year: 'numeric' }),
+            value: d.toISOString().slice(0, 7)
+        };
+    });
 
     const fetchReport = async () => {
         setLoading(true);
@@ -57,8 +62,10 @@ const InsightsScreen = () => {
         );
     }
 
-    const diff = report.totalSpent - report.lastMonthTotal;
-    const diffPercent = report.lastMonthTotal ? (diff / report.lastMonthTotal) * 100 : 0;
+    const totalSpent = report?.totalSpent || 0;
+    const lastMonthTotal = report?.lastMonthTotal || 0;
+    const diff = totalSpent - lastMonthTotal;
+    const diffPercent = lastMonthTotal ? (diff / lastMonthTotal) * 100 : 0;
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -98,7 +105,7 @@ const InsightsScreen = () => {
                         <BarChart2 color="#fff" size={24} />
                         <Text style={styles.summaryLabel}>Total Spent this Month</Text>
                     </View>
-                    <Text style={styles.trendValue}>{report.totalSpent.toFixed(3)} TND</Text>
+                    <Text style={styles.trendValue}>{totalSpent.toFixed(3)} TND</Text>
                     <View style={styles.trendChip}>
                         {diffPercent <= 0 ? <ArrowDownRight size={16} color="#4ade80" /> : <ArrowUpRight size={16} color="#fb7185" />}
                         <Text style={styles.trendPercent}>{Math.abs(diffPercent).toFixed(1)}% vs last month</Text>
@@ -127,28 +134,28 @@ const InsightsScreen = () => {
                         </View>
                         <Text style={[styles.adviceText, { color: theme.colors.text }]}>{aiInsights.recommendation}</Text>
                         <Text style={[styles.forecastText, { color: theme.colors.textSecondary }]}>
-                            Forecast for next month: <Text style={{ color: theme.colors.primary, fontWeight: 'bold' }}>{aiInsights.next_month_forecast?.toFixed(3)} TND</Text>
+                            Forecast for next month: <Text style={{ color: theme.colors.primary, fontWeight: 'bold' }}>{(aiInsights.next_month_forecast || 0).toFixed(3)} TND</Text>
                         </Text>
                     </View>
                 )}
 
                 {/* Category Breakdown (Visual) */}
                 <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Category Breakdown</Text>
-                {report.categories.length === 0 ? (
+                {(!report?.categories || report.categories.length === 0) ? (
                     <Text style={{ color: theme.colors.textSecondary, fontStyle: 'italic', marginBottom: 20 }}>No expenses recorded for this month.</Text>
                 ) : report.categories.map((item, index) => (
                     <View key={index} style={styles.catRow}>
                         <View style={styles.catInfo}>
                             <Text style={[styles.catName, { color: theme.colors.text }]}>{item.name}</Text>
-                            <Text style={[styles.catAmount, { color: theme.colors.textSecondary }]}>{item.total.toFixed(3)} TND</Text>
+                            <Text style={[styles.catAmount, { color: theme.colors.textSecondary }]}>{(item.total || 0).toFixed(3)} TND</Text>
                         </View>
                         <View style={[styles.progressBg, { backgroundColor: theme.colors.surface }]}>
                             <View 
                                 style={[
                                     styles.progressFill, 
                                     { 
-                                        width: `${(item.total / report.totalSpent) * 100}%`,
-                                        backgroundColor: theme.colors.primary 
+                                        width: `${totalSpent > 0 ? (item.total / totalSpent) * 100 : 0}%`,
+                                        backgroundColor: item.color || theme.colors.primary 
                                     }
                                 ]} 
                             />

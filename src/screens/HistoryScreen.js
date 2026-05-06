@@ -13,6 +13,7 @@ const HistoryScreen = ({ navigation }) => {
     const { expenses, refreshExpenses } = useExpenses();
 
     const speak = (text) => {
+        if (!text) return;
         Speech.speak(text.toString(), { language: 'ar-TN' });
     };
 
@@ -40,7 +41,7 @@ const HistoryScreen = ({ navigation }) => {
     };
 
     const exportToCSV = async () => {
-        if (expenses.length === 0) {
+        if (!expenses || expenses.length === 0) {
             Alert.alert('No Data', 'There are no expenses to export.');
             return;
         }
@@ -88,6 +89,7 @@ const HistoryScreen = ({ navigation }) => {
                 contentContainerStyle={styles.listContent}
                 renderItem={({ item }) => {
                     if (!item) return null;
+                    const amount = item.amount || 0;
                     return (
                         <TouchableOpacity 
                             style={[styles.transactionCard, { backgroundColor: theme.colors.surface }]}
@@ -103,10 +105,10 @@ const HistoryScreen = ({ navigation }) => {
                             </View>
                             <View style={{ alignItems: 'flex-end' }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <TouchableOpacity onPress={() => speak(item.amount.toFixed(3))} style={{ marginRight: 8 }}>
+                                    <TouchableOpacity onPress={() => speak(amount.toFixed(3))} style={{ marginRight: 8 }}>
                                         <Volume2 size={16} color={theme.colors.textSecondary} />
                                     </TouchableOpacity>
-                                    <Text style={[styles.transactionAmount, { color: theme.colors.error }]}>-{item.amount?.toFixed(3)}</Text>
+                                    <Text style={[styles.transactionAmount, { color: theme.colors.error }]}>-{amount.toFixed(3)}</Text>
                                 </View>
                                 <TouchableOpacity onPress={() => handleDelete(item._id)} style={{ marginTop: 8 }}>
                                     <Trash2 size={16} color={theme.colors.error} />

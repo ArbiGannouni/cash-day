@@ -115,7 +115,8 @@ export const apiClient = {
     });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.message || `Server responded with ${res.status}`);
+      const detailedError = errorData.error ? ` (${errorData.error})` : '';
+      throw new Error((errorData.message || `Server error ${res.status}`) + detailedError);
     }
     return await res.json();
   },

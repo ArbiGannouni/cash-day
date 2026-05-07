@@ -81,19 +81,14 @@ router.post('/ai/process-voice', async (req, res) => {
     
     let result;
     try {
-      // Trying Gemini 2.0 Flash (Experimental)
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-      result = await model.generateContent([
-        systemPrompt,
-        { inlineData: { data: audioBase64, mimeType: "audio/m4a" } }
-      ]);
-    } catch (e) {
-      console.log('Gemini 2.0 failed, using stable 1.5-flash...', e.message);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       result = await model.generateContent([
         systemPrompt,
         { inlineData: { data: audioBase64, mimeType: "audio/m4a" } }
       ]);
+    } catch (e) {
+      console.error('Gemini AI Error:', e.message);
+      throw e;
     }
 
     const response = await result.response;
@@ -103,15 +98,13 @@ router.post('/ai/process-voice', async (req, res) => {
     if (jsonMatch) {
       res.json(JSON.parse(jsonMatch[0]));
     } else {
-      console.error('AI Text Response:', text);
-      res.status(500).json({ message: 'AI failed to parse the response', raw: text });
+      res.status(500).json({ message: 'AI failed to parse the response' });
     }
   } catch (err) {
     console.error('AI Full Error:', err);
     res.status(500).json({ 
       message: 'Error processing AI request', 
-      error: err.message,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+      error: err.message
     });
   }
 });

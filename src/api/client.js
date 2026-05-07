@@ -5,7 +5,7 @@ const debuggerHost = Constants.expoConfig?.hostUri || Constants.manifest2?.extra
 const localhost = debuggerHost ? debuggerHost.split(':')[0] : '10.0.2.2'; // Default to Android emulator host
 
 // 1. UPDATE THIS URL to your actual Vercel deployment URL
-const PRODUCTION_URL = 'https://flous-chhar-backend.vercel.app/api'; 
+const PRODUCTION_URL = 'https://cash-day-ebon.vercel.app/api'; 
 
 // 2. Set this to 'true' if you want to use the Vercel backend while testing in Expo Go
 const USE_PRODUCTION_IN_EXPO_GO = true; 

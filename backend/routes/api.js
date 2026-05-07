@@ -81,15 +81,15 @@ router.post('/ai/process-voice', async (req, res) => {
     
     let result;
     try {
-      // gemini-2.0-flash is available on your key
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      // Trying Gemini 2.0 Flash (Experimental)
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
       result = await model.generateContent([
         systemPrompt,
         { inlineData: { data: audioBase64, mimeType: "audio/m4a" } }
       ]);
     } catch (e) {
-      console.log('Gemini 2.0-flash failed, trying 2.5-flash...', e.message);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      console.log('Gemini 2.0 failed, using stable 1.5-flash...', e.message);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       result = await model.generateContent([
         systemPrompt,
         { inlineData: { data: audioBase64, mimeType: "audio/m4a" } }
@@ -127,18 +127,15 @@ router.post('/ai/process-receipt', async (req, res) => {
 
     let result;
     try {
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       result = await model.generateContent([
         systemPrompt,
         { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
       ]);
     } catch (e) {
-      console.log('Gemini 2.0-flash receipt failed, trying 2.5-flash...', e.message);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-      result = await model.generateContent([
-        systemPrompt,
-        { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
-      ]);
+      console.log('Gemini AI failed...', e.message);
+      res.status(500).json({ message: 'AI failed to process receipt' });
+      return;
     }
 
     const response = await result.response;

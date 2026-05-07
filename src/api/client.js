@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { aiService } from './aiService';
 
 // Dynamically get the host IP (works for both physical devices and emulators)
 const debuggerHost = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoGo?.debuggerHost || '';
@@ -105,31 +106,10 @@ export const apiClient = {
     return await res.json();
   },
   processVoice: async (audioBase64) => {
-    const res = await fetch(`${BASE_URL}/ai/process-voice`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'x-api-key': API_KEY
-      },
-      body: JSON.stringify({ audioBase64 }),
-    });
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      const detailedError = errorData.error ? ` (${errorData.error})` : '';
-      throw new Error((errorData.message || `Server error ${res.status}`) + detailedError);
-    }
-    return await res.json();
+    return await aiService.processVoice(audioBase64);
   },
   processReceipt: async (imageBase64) => {
-    const res = await fetch(`${BASE_URL}/ai/process-receipt`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'x-api-key': API_KEY
-      },
-      body: JSON.stringify({ imageBase64 }),
-    });
-    return await res.json();
+    return await aiService.processReceipt(imageBase64);
   },
   getMonthlyStats: async () => {
     const res = await fetch(`${BASE_URL}/stats/monthly`, {
@@ -144,21 +124,12 @@ export const apiClient = {
     return await res.json();
   },
   getBudgetAlert: async (data) => {
-    const res = await fetch(`${BASE_URL}/ai/budget-alert`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'x-api-key': API_KEY
-      },
-      body: JSON.stringify(data),
-    });
-    return await res.json();
+    return await aiService.getBudgetAlert(data);
   },
   getAiInsights: async (month) => {
-    const res = await fetch(`${BASE_URL}/ai/insights${month ? `?month=${month}` : ''}`, {
-      headers: { 'x-api-key': API_KEY }
-    });
-    return await res.json();
+    // We can fetch report from API and then process with local AI for better experience
+    const report = await apiClient.getStatsReport(month);
+    return await aiService.getAiInsights(report);
   },
   getStatsReport: async (month) => {
     const res = await fetch(`${BASE_URL}/stats/report${month ? `?month=${month}` : ''}`, {

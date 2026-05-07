@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // REPLACE WITH YOUR ACTUAL GEMINI API KEY
-const GEMINI_API_KEY = "AIzaSyASEFYPa2vSfgfSBR_HsO88l-Y0RK2_xUE";
+const GEMINI_API_KEY = "AIzaSyDPwP94IuI_VrUhwx3Ybj5P0DPNu6V-h3k";
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
@@ -9,17 +9,17 @@ export const aiService = {
   processVoice: async (audioBase64) => {
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const systemPrompt = `أنت مساعد مالي تونسي خبير في فهم الدارجة التونسية (Darija). 
-      مهمتك هي تحليل الملاحظات الصوتية واستخراج البيانات المالية بدقة.
+      const systemPrompt = `Task: Extract financial data from Tunisian Darija audio.
+      Format: Return ONLY a JSON object. No extra text, no conversation.
       
-      يجب أن يكون الرد بصيغة JSON فقط:
+      JSON Structure:
       {
-        "transcription": "النص المسموع بالدارجة",
-        "amount": الرقم فقط بالدينار,
+        "transcription": "text in darija",
+        "amount": number,
         "category": "Food" | "Transport" | "Rent" | "Health" | "Shopping" | "Others",
-        "description": "وصف قصير ومختصر بالدارجة التونسية (مثلاً: قضية من العطار، خلاص ضو، إلخ)",
-        "confidence": نسبة ثقتك في التصنيف بين 0 و 1,
-        "tags": ["أوسمة", "قصيرة"],
+        "description": "short description",
+        "confidence": 0.0 to 1.0,
+        "tags": ["tag1", "tag2"],
         "paymentMethod": "Cash" | "Card" | "Transfer"
       }`;
 
@@ -35,7 +35,8 @@ export const aiService = {
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
       }
-      throw new Error("AI failed to parse response");
+      console.error("Raw AI Response:", text);
+      throw new Error("AI returned text instead of data: " + text.substring(0, 50));
     } catch (error) {
       console.error("Client AI Error:", error);
       throw error;

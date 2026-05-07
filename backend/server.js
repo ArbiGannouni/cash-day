@@ -12,6 +12,10 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Health Check Routes
+app.get('/', (req, res) => res.json({ status: 'Server is running', environment: process.env.NODE_ENV }));
+app.get('/api/health', (req, res) => res.json({ status: 'API is healthy' }));
+
 // Security Middleware: Check for API Key
 const API_KEY = process.env.APP_API_KEY || 'flous_chhar_secret_2026';
 app.use((req, res, next) => {
@@ -54,6 +58,10 @@ const connectWithRetry = () => {
 
 connectWithRetry();
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
+
+module.exports = app;

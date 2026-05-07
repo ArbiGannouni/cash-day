@@ -3,8 +3,16 @@ import Constants from 'expo-constants';
 // Dynamically get the host IP (works for both physical devices and emulators)
 const debuggerHost = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoGo?.debuggerHost || '';
 const localhost = debuggerHost ? debuggerHost.split(':')[0] : '10.0.2.2'; // Default to Android emulator host
-export const BASE_URL = `http://${localhost}:5000/api`;
 
+// 1. UPDATE THIS URL to your actual Vercel deployment URL
+const PRODUCTION_URL = 'https://flous-chhar-backend.vercel.app/api'; 
+
+// 2. Set this to 'true' if you want to use the Vercel backend while testing in Expo Go
+const USE_PRODUCTION_IN_EXPO_GO = true; 
+
+export const BASE_URL = (__DEV__ && !USE_PRODUCTION_IN_EXPO_GO) 
+  ? `http://${localhost}:5000/api` 
+  : PRODUCTION_URL;
 
 const API_KEY = 'flous_chhar_secret_2026'; // Match with backend
 

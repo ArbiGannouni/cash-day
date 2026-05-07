@@ -38,7 +38,8 @@
     "extra": {
       "eas": {
         "projectId": "9666b2af-a46e-46a5-a8a7-2ac50d7a2194"
-      }
+      },
+      "geminiApiKey": "AIzaSyDPwP94IuI_VrUhwx3Ybj5P0DPNu6V-h3k"
     },
     "updates": {
       "url": "https://u.expo.dev/9666b2af-a46e-46a5-a8a7-2ac50d7a2194"

@@ -103,11 +103,16 @@ router.post('/ai/process-voice', async (req, res) => {
     if (jsonMatch) {
       res.json(JSON.parse(jsonMatch[0]));
     } else {
-      res.status(500).json({ message: 'AI failed to parse the response' });
+      console.error('AI Text Response:', text);
+      res.status(500).json({ message: 'AI failed to parse the response', raw: text });
     }
   } catch (err) {
-    console.error('AI Error:', err);
-    res.status(500).json({ message: 'Error processing AI request', error: err.message });
+    console.error('AI Full Error:', err);
+    res.status(500).json({ 
+      message: 'Error processing AI request', 
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+    });
   }
 });
 
